@@ -1,6 +1,7 @@
 import { PullRequest, PullRequestClosedEvent, PullRequestEvent, PullRequestOpenedEvent } from '@octokit/webhooks-types';
 import { WebClient } from '@slack/web-api'
 import { text } from 'express';
+import e = require('express');
 
 /**
  * @klotho::persist {
@@ -35,37 +36,46 @@ export class Slack {
 
     async handlePrEvent(channel: string, event: PullRequestEvent) {
         let pr = event.pull_request
-        switch (event.action) {
-            case 'opened':
-                console.log('handling open event')
-                let ts = await this.sendSlackMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}`)
-                await kvStore.set(this.prThreadKey(pr), ts)
-                console.log(`posted message for ${pr.url} at ${ts}`)
-                let content = (pr.body == null) ? "No description provided" : `Content:\n${quote(pr.body)}`
-                await this.sendSlackMessage(channel, content, ts)
-                console.log('posted self-reply')
-                break
-            case 'closed':
-                console.log('handling close event')
-                let prevTs = await kvStore.get(this.prThreadKey(pr))
-                if (typeof prevTs === 'string') {
-                    let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
-                    let emoji = `:${mergeVerb}:`
+        Slack.arguments
+        let handler = new Map([
+            ['opened', this.handlePrOpened],
+            ['closed', this.handlePrClosed],
+        ]).get(event.action)
+        if (handler === undefined) {
+            console.warn(`Don't know how to handle events of type`, event.action)
+            return
+        }
+        handler(channel, event)
+    }
 
-                    let client = await this.web;
-                    await client.chat.update({
-                        channel: channel,
-                        ts: prevTs,
-                        text: `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}~`,
-                    })
-                    await this.sendSlackMessage(channel, `${emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
-                } else {
-                    console.warn("no previous ts found for pr", pr)
-                }
-                break
-            default:
-                console.warn(`Don't know how to handle events of type`, event.action)
-                break
+    private async handlePrOpened(channel: string, event: PullRequestEvent) {
+        let pr = event.pull_request
+        console.log('handling open event')
+        let ts = await this.sendSlackMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}`)
+        await kvStore.set(this.prThreadKey(pr), ts)
+        console.log(`posted message for ${pr.url} at ${ts}`)
+        let content = (pr.body == null) ? "No description provided" : `Content:\n${quote(pr.body)}`
+        await this.sendSlackMessage(channel, content, ts)
+        console.log('posted self-reply')
+    }
+
+    private async handlePrClosed(channel: string, event: PullRequestEvent) {
+        let pr = event.pull_request
+        console.log('handling close event')
+        let prevTs = await kvStore.get(this.prThreadKey(pr))
+        if (typeof prevTs === 'string') {
+            let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
+            let emoji = `:${mergeVerb}:`
+
+            let client = await this.web;
+            await client.chat.update({
+                channel: channel,
+                ts: prevTs,
+                text: `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}~`,
+            })
+            await this.sendSlackMessage(channel, `${emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
+        } else {
+            console.warn("no previous ts found for pr", pr)
         }
     }
 

@@ -35,3 +35,12 @@ unblock`
 > unblock`
   expect(slack.quote(input)).toBe(output)
 })
+
+test('foo', () => {
+  let y = Object.keys(slack.Slack.prototype)
+  let x = new slack.Slack()
+  x.handlePrEvent
+  for (let m in x) {
+    console.log(m)
+  }
+})

@@ -49,13 +49,14 @@ test('new PR', async () => {
   await client.handlePrEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', ':pull-request: PR <pr-url|#123: My Cool Title> by eagle'],
-    ['mychannel', 'No description provided', 'ts_1'],
+    ['mychannel', 'No description provided', 'ts_0'],
   ])
   expect(io.updateMessage.mock.calls).toEqual([])
 })
 
 class MockIO implements slack.SlackIO {
+  private messageCount = 0
   store = new Map<string, string | undefined>()
-  sendMessage = jest.fn((channel: string, text: string, ts?: string) => Promise.resolve(`ts_${this.sendMessage.mock.calls.length}`))
+  sendMessage = jest.fn((channel: string, text: string, ts?: string) => Promise.resolve(`ts_${this.messageCount++}`))
   updateMessage = jest.fn((channel: string, ts: string, text: string) => Promise.resolve())
 }

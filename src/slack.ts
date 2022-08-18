@@ -8,7 +8,7 @@ import e = require('express');
  *  secret = true
  * }
  */
-import fs = require("fs/promises");
+import secretsFs = require("fs/promises");
 /**
  * @klotho::persist {
  *   name = "slack_ids"
@@ -82,7 +82,7 @@ export function quote(text: string): string {
 }
 
 function createRealIO(): SlackIO {
-    let clientPromise = fs.readFile("slack_token").then(buf => {
+    let clientPromise = secretsFs.readFile("slack_token").then(buf => {
         let token = buf.toString('utf-8')
         return new WebClient(token)
     })

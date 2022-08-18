@@ -87,7 +87,6 @@ export class Slack {
             console.warn("no previous ts found for pr", pr)
         }
     }
-
 }
 
 /**

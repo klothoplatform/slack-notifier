@@ -1,4 +1,4 @@
-import { PullRequest, PullRequestClosedEvent, PullRequestOpenedEvent } from '@octokit/webhooks-types';
+import { PullRequest, PullRequestClosedEvent, PullRequestOpenedEvent, PullRequestSynchronizeEvent } from '@octokit/webhooks-types';
 import * as slack from '../src/slack'
 import { createMock } from 'ts-auto-mock';
 
@@ -50,6 +50,43 @@ test('new PR', async () => {
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', ':pull-request: PR <pr-url|#123: My Cool Title> by eagle'],
     ['mychannel', 'No description provided', 'ts_0'],
+  ])
+  expect(io.updateMessage.mock.calls).toEqual([])
+})
+
+test("sync PR",async () => {
+  let io = new MockIO()
+  let client = new slack.Slack(io)
+  let request = createMock<PullRequestSynchronizeEvent>()
+  request.repository.html_url = "https://example.com/repo"
+  request.before = "abcdef1234567890"
+  request.after = "1234567890abcdef"
+  request.pull_request.url = "https://example.com/pr/123"
+  io.store.set(slack.prThreadKey(request.pull_request), "t0")
+  await client.handlePrEvent("mychannel", request)
+  expect(io.sendMessage.mock.calls).toEqual([
+    ['mychannel', 'PR updated. Diff: <https://example.com/repo/compare/abcdef1234567890..1234567890abcdef|abcdef1..1234567>', "t0"],
+  ])
+  expect(io.updateMessage.mock.calls).toEqual([])
+})
+
+/**
+ * Like `sync PR`, but with the PR shas similar in their first 10 letters.
+ * 
+ * We should lengthen them until they're unique.
+ */
+test("sync PR with similar SHAs",async () => {
+  let io = new MockIO()
+  let client = new slack.Slack(io)
+  let request = createMock<PullRequestSynchronizeEvent>()
+  request.repository.html_url = "https://example.com/repo"
+  request.before = "1234567890aaa"
+  request.after =  "1234567890bbb"
+  request.pull_request.url = "https://example.com/pr/123"
+  io.store.set(slack.prThreadKey(request.pull_request), "t0")
+  await client.handlePrEvent("mychannel", request)
+  expect(io.sendMessage.mock.calls).toEqual([
+    ['mychannel', 'PR updated. Diff: <https://example.com/repo/compare/1234567890aaa..1234567890bbb|1234567890a..1234567890b>', "t0"],
   ])
   expect(io.updateMessage.mock.calls).toEqual([])
 })

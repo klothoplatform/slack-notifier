@@ -72,7 +72,7 @@ export class Slack {
                     break
                 }
             }
-            let msg = `PR updated. Diff: <${syncEvent.repository.html_url}/compare/${syncEvent.before}..${syncEvent.after}|${beforeShort}..${afterShort}>`
+            let msg = `PR updated: <${pr.html_url}/files/${syncEvent.before}..${syncEvent.after}|${beforeShort}..${afterShort}>`
             await this.io.sendMessage(channel, msg, thread_ts)
 
         })

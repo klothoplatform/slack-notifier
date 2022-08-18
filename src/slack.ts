@@ -49,14 +49,20 @@ export class Slack {
 
     private async handlePrClosed(channel: string, event: PullRequestEvent) {
         console.log('handling close event')
-        let pr = event.pull_request
-        let prevTs = await kvStore.get(this.prThreadKey(pr))
-        if (typeof prevTs === 'string') {
+        await this.onPrThread(event, async (pr, prevTs) => {
             let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
             let emoji = `:${mergeVerb}:`
             let updateTopLevelMessage = this.io.updateMessage( channel, prevTs, `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}~`)
             let postToThread = this.io.sendMessage(channel, `${emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
             await Promise.all([updateTopLevelMessage, postToThread])
+        })
+    }
+
+    private async onPrThread(event: PullRequestEvent, action: (pr: PullRequest, prevTs: string) => Promise<void>) {
+        let pr = event.pull_request
+        let prevTs = await kvStore.get(this.prThreadKey(pr))
+        if (typeof prevTs === 'string') {
+            await action(pr, prevTs)
         } else {
             console.warn("no previous ts found for pr", pr)
         }
@@ -65,6 +71,7 @@ export class Slack {
     private prThreadKey(pr: PullRequest) {
         return `pr_thread_${pr.url}`
     }
+
 }
 
 export interface SlackIO {

@@ -43,14 +43,14 @@ export class Slack {
         console.log('handling open event')
         let pr = event.pull_request
         let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}`)
-        await this.io.store.set(prThreadKey(pr), ts)
+        await this.io.store.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
         await this.io.sendMessage(channel, content, ts)
     }
 
     private async handlePrClosed(channel: string, event: PullRequestEvent) {
         console.log('handling close event')
-        await this.onPrThread(event, async (pr, prevTs) => {
+        await this.onPrThread(channel, event, async (pr, prevTs) => {
             let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
             let emoji = `:${mergeVerb}:`
             let updateTopLevelMessage = this.io.updateMessage( channel, prevTs, `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}~`)
@@ -61,7 +61,7 @@ export class Slack {
 
     private async handlePrSynchronized(channel: string, event: PullRequestEvent) {
         console.log('handling sync case')
-        await this.onPrThread(event, async (pr, thread_ts) => {
+        await this.onPrThread(channel, event, async (pr, thread_ts) => {
             let syncEvent = event as PullRequestSynchronizeEvent
             let beforeShort = syncEvent.before
             let afterShort = syncEvent.after
@@ -78,9 +78,9 @@ export class Slack {
         })
     }
 
-    private async onPrThread(event: PullRequestEvent, action: (pr: PullRequest, thread_ts: string) => Promise<void>) {
+    private async onPrThread(channel: string, event: PullRequestEvent, action: (pr: PullRequest, thread_ts: string) => Promise<void>) {
         let pr = event.pull_request
-        let thread_ts = await this.io.store.get(prThreadKey(pr))
+        let thread_ts = await this.io.store.get(prThreadKey(channel, pr))
         if (typeof thread_ts === 'string') {
             await action(pr, thread_ts)
         } else {
@@ -92,8 +92,8 @@ export class Slack {
 /**
  * The key to store in `SlackIO.store`, whose value corresponds to a PR's thread in slack.
  */
-export function prThreadKey(pr: PullRequest): string {
-    return `pr_thread_${pr.url}`
+export function prThreadKey(channel: string, pr: PullRequest): string {
+    return `pr_thread_${channel}_${pr.url}`
 }
 
 export interface SlackIO {

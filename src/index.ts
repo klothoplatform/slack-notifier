@@ -6,23 +6,18 @@
 
 import express from 'express';
 import { Slack } from './slack'
-import { WebhookEvent, PullRequestEvent, PullRequestOpenedEvent, PullRequest } from "@octokit/webhooks-types";
-import e from 'express';
+import { PullRequestEvent } from "@octokit/webhooks-types";
 
-// TODO make the following configurable
-// const channelId = 'C03TAJGB12T' // #slack-notifications-demo make configurable
-// const channelId = 'C02HB4GSS78' // #daily-a-sync
-// const channelId = 'C02T0929PHD' // #test-channel
 const channelId = 'C03RLV1M82F' // #klotho-donuts
 
 const app = express()
 const router = express.Router();
 router.use(express.json())
 
+let slack = new Slack()
 
 router.post('/github', async (req: express.Request, res: express.Response) => {
     try {
-        let slack = new Slack()
         let prEvent = req.body as PullRequestEvent
         await slack.handlePrEvent(channelId, prEvent)
         res.send("ok")

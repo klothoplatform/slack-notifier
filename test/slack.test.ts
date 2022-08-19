@@ -62,7 +62,7 @@ test("sync PR",async () => {
   request.after = "1234567890abcdef"
   request.pull_request.url = "https://api.example.com/pr/123"
   request.pull_request.html_url = "https://example.com/pr/123"
-  io.store.set(slack.prThreadKey(request.pull_request), "t0")
+  io.store.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
   await client.handlePrEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', 'PR updated: <https://example.com/pr/123/files/abcdef1234567890..1234567890abcdef|abcdef1..1234567>', "t0"],
@@ -83,7 +83,7 @@ test("sync PR with similar SHAs",async () => {
   request.after =  "1234567890bbb"
   request.pull_request.url = "https://api.example.com/pr/123"
   request.pull_request.html_url = "https://example.com/pr/123"
-  io.store.set(slack.prThreadKey(request.pull_request), "t0")
+  io.store.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
   await client.handlePrEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', 'PR updated: <https://example.com/pr/123/files/1234567890aaa..1234567890bbb|1234567890a..1234567890b>', "t0"],

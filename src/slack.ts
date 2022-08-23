@@ -41,7 +41,7 @@ export class Slack {
     private async handlePrOpened(channel: string, event: PullRequestEvent) {
         console.log('handling open event')
         let pr = event.pull_request
-        let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}))by ${event.sender.login}`)
+        let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
         await this.io.store.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
         await this.io.sendMessage(channel, content, ts)

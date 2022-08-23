@@ -1,7 +1,5 @@
 import { PullRequest, PullRequestEvent, PullRequestSynchronizeEvent } from '@octokit/webhooks-types';
 import { WebClient } from '@slack/web-api'
-import { text } from 'express';
-import e = require('express');
 
 /**
  * @klotho::persist {
@@ -42,7 +40,7 @@ export class Slack {
     private async handlePrOpened(channel: string, event: PullRequestEvent) {
         console.log('handling open event')
         let pr = event.pull_request
-        let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}`)
+        let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}))by ${event.sender.login}`)
         await this.io.store.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
         await this.io.sendMessage(channel, content, ts)
@@ -53,7 +51,7 @@ export class Slack {
         await this.onPrThread(channel, event, async (pr, prevTs) => {
             let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
             let emoji = `:${mergeVerb}:`
-            let updateTopLevelMessage = this.io.updateMessage( channel, prevTs, `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> by ${event.sender.login}~`)
+            let updateTopLevelMessage = this.io.updateMessage(channel, prevTs, `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}~`)
             let postToThread = this.io.sendMessage(channel, `${emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
             await Promise.all([updateTopLevelMessage, postToThread])
         })
@@ -74,7 +72,6 @@ export class Slack {
             }
             let msg = `PR updated: <${pr.html_url}/files/${syncEvent.before}..${syncEvent.after}|${beforeShort}..${afterShort}>`
             await this.io.sendMessage(channel, msg, thread_ts)
-
         })
     }
 

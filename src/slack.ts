@@ -3,13 +3,14 @@ import { WebClient } from '@slack/web-api'
 
 /**
  * @klotho::persist {
+ *  id = "security-tokens"
  *  secret = true
  * }
  */
 import secretsFs = require("fs/promises");
 /**
  * @klotho::persist {
- *   name = "slack_ids"
+ *   id = "slack_ids"
  * }
  */
 let kvStore = new Map<string, string | undefined>()

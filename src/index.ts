@@ -30,6 +30,7 @@ router.post('/github', async (req: express.Request, res: express.Response) => {
 app.use(router)
 
 /* @klotho::expose {
+    id = "gh-webhook"
  *  target = "public"
  * }
  */

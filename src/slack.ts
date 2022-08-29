@@ -1,4 +1,4 @@
-import { PullRequest, PullRequestEvent, PullRequestSynchronizeEvent } from '@octokit/webhooks-types';
+import { IssueCommentEvent, PullRequest, PullRequestEvent, PullRequestSynchronizeEvent } from '@octokit/webhooks-types';
 import { WebClient } from '@slack/web-api'
 
 /**
@@ -23,19 +23,16 @@ export class Slack {
         this.io = io ?? createRealIO()
     }
 
-    async handlePrEvent(channel: string, event: PullRequestEvent) {
-        let pr = event.pull_request
-        let handler = new Map([
-            ['opened', this.handlePrOpened],
-            ['closed', this.handlePrClosed],
-            ['synchronize', this.handlePrSynchronized],
-        ]).get(event.action)
-        if (handler === undefined) {
+    async handleEvent(channel: string, event: PullRequestEvent | IssueCommentEvent) {
+        if (event.action === 'opened') {
+            await this.handlePrOpened(channel, event)
+        } else if (event.action === 'closed') {
+            await this.handlePrClosed(channel, event)
+        } else if (event.action === 'synchronize') {
+            await this.handlePrSynchronized(channel, event)
+        } else {
             console.warn(`Don't know how to handle events of type`, event.action)
-            return
         }
-        await handler.call(this, channel, event)
-        console.log("request complete")
     }
 
     private async handlePrOpened(channel: string, event: PullRequestEvent) {

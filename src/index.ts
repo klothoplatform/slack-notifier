@@ -6,7 +6,7 @@
 
 import express from 'express';
 import { Slack } from './slack'
-import { PullRequestEvent } from "@octokit/webhooks-types";
+import { IssueCommentEvent, PullRequestEvent, Schema } from "@octokit/webhooks-types";
 
 const channelId = 'C03RLV1M82F' // #klotho-donuts
 
@@ -18,8 +18,8 @@ let slack = new Slack()
 
 router.post('/github', async (req: express.Request, res: express.Response) => {
     try {
-        let prEvent = req.body as PullRequestEvent
-        await slack.handlePrEvent(channelId, prEvent)
+        let event = req.body as (PullRequestEvent | IssueCommentEvent)
+        await slack.handleEvent(channelId, event)
         res.send("ok")
     } catch (e) {
         console.log("error getting users", e)

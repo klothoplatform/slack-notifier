@@ -45,10 +45,12 @@ test('new PR', async () => {
   request.pull_request.title = "My Cool Title"
   request.pull_request.html_url = "pr-url"
   request.pull_request.body = null
+  request.pull_request.additions = 111
+  request.pull_request.deletions = 222
   request.sender.login = "eagle"
-  await client.handlePrEvent("mychannel", request)
+  await client.handleEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
-    ['mychannel', ':pull-request: PR <pr-url|#123: My Cool Title> by eagle'],
+    ['mychannel', ':pull-request: PR <pr-url|#123: My Cool Title> (+111/-222) by eagle'],
     ['mychannel', 'No description provided', 'ts_0'],
   ])
   expect(io.updateMessage.mock.calls).toEqual([])
@@ -62,8 +64,8 @@ test("sync PR",async () => {
   request.after = "1234567890abcdef"
   request.pull_request.url = "https://api.example.com/pr/123"
   request.pull_request.html_url = "https://example.com/pr/123"
-  io.store.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
-  await client.handlePrEvent("mychannel", request)
+  io.store.prThreads.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
+  await client.handleEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', 'PR updated: <https://example.com/pr/123/files/abcdef1234567890..1234567890abcdef|abcdef1..1234567>', "t0"],
   ])
@@ -83,8 +85,8 @@ test("sync PR with similar SHAs",async () => {
   request.after =  "1234567890bbb"
   request.pull_request.url = "https://api.example.com/pr/123"
   request.pull_request.html_url = "https://example.com/pr/123"
-  io.store.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
-  await client.handlePrEvent("mychannel", request)
+  io.store.prThreads.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
+  await client.handleEvent("mychannel", request)
   expect(io.sendMessage.mock.calls).toEqual([
     ['mychannel', 'PR updated: <https://example.com/pr/123/files/1234567890aaa..1234567890bbb|1234567890a..1234567890b>', "t0"],
   ])
@@ -93,7 +95,12 @@ test("sync PR with similar SHAs",async () => {
 
 class MockIO implements slack.SlackIO {
   private messageCount = 0
-  store = new Map<string, string | undefined>()
+  store = {
+    prThreads: new Map<string, string | undefined>(),
+    lastCommenter: new Map<string, string>(),
+  }
+  
+  
   sendMessage = jest.fn((channel: string, text: string, ts?: string) => Promise.resolve(`ts_${this.messageCount++}`))
   updateMessage = jest.fn((channel: string, ts: string, text: string) => Promise.resolve())
 }

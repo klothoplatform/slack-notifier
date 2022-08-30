@@ -5,6 +5,8 @@ import {
     PullRequestClosedEvent,
     PullRequestEvent,
     PullRequestOpenedEvent,
+    PullRequestReviewCommentCreatedEvent,
+    PullRequestReviewCommentEvent,
     PullRequestReviewEvent,
     PullRequestReviewSubmittedEvent,
     PullRequestSynchronizeEvent,
@@ -43,7 +45,12 @@ export class Slack {
         this.io = io ?? createRealIO()
     }
 
-    async handleEvent(channel: string, event: PullRequestEvent | PullRequestReviewEvent | IssueCommentEvent) {
+    async handleEvent(channel: string, event: PullRequestEvent | PullRequestReviewEvent | IssueCommentEvent | PullRequestReviewCommentEvent) {
+        const bannedLogins = await this.getBannedGithubLogins()
+        if (bannedLogins.includes(event.sender.login)) {
+            console.log(`${event.sender.login} is on the blocklist. ignoring message.`)
+            return
+        }
         switch (event.action) {
             // PullRequestEvent...
             case 'opened':
@@ -59,9 +66,15 @@ export class Slack {
             case 'submitted':
                 await this.handlePrReviewSubmitted(channel, event)
                 break
-            // IssueCommentEvent...
+            // IssueCommentCreatedEvent or PullRequestReviewCommentCreatedEvent...
             case 'created':
-                await this.handleTopLevelCommentCreated(channel, event)
+                if ((event as object).hasOwnProperty('issue')) {
+                    event = event as IssueCommentCreatedEvent
+                    await this.handleTopLevelCommentCreated(channel, event)
+                } else {
+                    event = event as PullRequestReviewCommentCreatedEvent
+                    // We don't do anything with comments.
+                }
                 break
             default:
                 // Unknown...
@@ -172,6 +185,11 @@ export class Slack {
                 break
         }
         await this.io.sendMessage(channel, message, thread_ts)
+    }
+
+    private async getBannedGithubLogins(): Promise<string[]> {
+        // will eventually be configurable
+        return Promise.resolve(["github-actions[bot]"])
     }
 }
 

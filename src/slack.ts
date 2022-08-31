@@ -166,7 +166,7 @@ export class Slack {
             console.info("No handler for action=", event.action)
             return
         }
-        const lastCommenter = this.io.store.lastCommenter.get(lastCommenterKey)
+        const lastCommenter = await this.io.store.lastCommenter.get(lastCommenterKey)
         const commentAuthor = event.sender.login
         if (lastCommenter === commentAuthor) {
             console.info("Ignoring event because current commenter is last commenter", commentAuthor)
@@ -185,6 +185,7 @@ export class Slack {
                 break
         }
         await this.io.sendMessage(channel, message, thread_ts)
+        await this.io.store.lastCommenter.set(lastCommenterKey, commentAuthor)
     }
 
     private async getBannedGithubLogins(): Promise<string[]> {

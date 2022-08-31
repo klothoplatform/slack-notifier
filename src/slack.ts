@@ -3,8 +3,10 @@ import {
     IssueCommentEvent,
     PullRequest,
     PullRequestClosedEvent,
+    PullRequestConvertedToDraftEvent,
     PullRequestEvent,
     PullRequestOpenedEvent,
+    PullRequestReadyForReviewEvent,
     PullRequestReviewCommentCreatedEvent,
     PullRequestReviewCommentEvent,
     PullRequestReviewEvent,
@@ -56,8 +58,14 @@ export class Slack {
             case 'opened':
                 await this.handlePrOpened(channel, event)
                 break
+            case 'converted_to_draft':
+                await this.handlePrConvertedToDraft(channel, event)
+                break
             case 'closed':
                 await this.handlePrClosed(channel, event)
+                break
+            case 'ready_for_review':
+                await this.handlePrReadyForReview(channel, event)
                 break
             case 'synchronize':
                 await this.handlePrSynchronized(channel, event)
@@ -85,12 +93,39 @@ export class Slack {
 
     private async handleTopLevelCommentCreated(channel: string, event: IssueCommentCreatedEvent) {
         const prUrl = event.issue.pull_request?.url
+        const isDraft = event.issue.draft ?? false // to be safe? idk. it shouldn't be undefined
         if (typeof prUrl === 'string') {
-            await this.handleCommentSubmitted(channel, { url: prUrl }, event, CommentAction.COMMENT)
+            await this.handleCommentSubmitted(channel, { url: prUrl, draft: isDraft }, event, CommentAction.COMMENT)
         }
     }
 
+    private async handlePrConvertedToDraft(channel: string, event: PullRequestConvertedToDraftEvent) {
+        await this.onPrThread(channel, event, async (pr, prevTs) => {
+            const update = this.io.updateMessage(channel, prevTs, `:see_no_evil: DRAFT PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
+            const send = this.io.sendMessage(channel, ":see_no_evil: PR has been converted to draft", prevTs)
+            await Promise.all([update, send])
+        })
+    }
+
+    private async handlePrReadyForReview(channel: string, event: PullRequestReadyForReviewEvent) {
+        await this.onPrThread(channel, event, async (pr, prevTs) => {
+            const update = this.io.updateMessage(channel, prevTs, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
+            const send = this.io.sendMessage(channel, ":pull-request: PR is ready for review", prevTs)
+            // clear the lastCommenter, if there is one; it's considered a fresh line of commenting
+            let clearLastCommenter: any
+            const lastCommenterKey = prLastCommenterThreadKey(channel, event)
+            if (lastCommenterKey !== undefined) {
+                clearLastCommenter = this.io.store.lastCommenter.set(lastCommenterKey, "")
+            }
+            await Promise.all([update, send, clearLastCommenter])
+        })
+    }
+
     private async handlePrReviewSubmitted(channel: string, event: PullRequestReviewSubmittedEvent) {
+        if (event.pull_request.draft) {
+            console.log('ignoring PR because it is in draft mode')
+            return
+        }
         var action: CommentAction
         switch (event.review.state) {
             case 'approved':
@@ -109,7 +144,8 @@ export class Slack {
     private async handlePrOpened(channel: string, event: PullRequestOpenedEvent) {
         console.log('handling open event')
         let pr = event.pull_request
-        let ts = await this.io.sendMessage(channel, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
+        const header = pr.draft ? ":see_no_evil: DRAFT" : ":pull-request:"
+        let ts = await this.io.sendMessage(channel, `${header} PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
         await this.io.store.prThreads.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
         await this.io.sendMessage(channel, content, ts)
@@ -128,6 +164,10 @@ export class Slack {
 
     private async handlePrSynchronized(channel: string, event: PullRequestSynchronizeEvent) {
         console.log('handling sync case')
+        if (event.pull_request.draft) {
+            console.log('ignoring PR because it is in draft mode')
+            return
+        }
         await this.onPrThread(channel, event, async (pr, thread_ts) => {
             let syncEvent = event as PullRequestSynchronizeEvent
             let beforeShort = syncEvent.before
@@ -155,6 +195,10 @@ export class Slack {
     }
 
     private async handleCommentSubmitted(channel: string, pr: PullRequestUrlProvider, event: IssueCommentCreatedEvent | PullRequestReviewSubmittedEvent, action: CommentAction) {
+        if (pr.draft) {
+            console.log('ignoring PR because it is in draft mode', pr.url)
+            return
+        }
         let thread_ts = await this.io.store.prThreads.get(prThreadKey(channel, pr))
         if (thread_ts === undefined) {
             console.warn("no previous ts found for pr", pr)
@@ -204,7 +248,7 @@ export function prThreadKey(channel: string, pr: PullRequestUrlProvider): string
 /**
  * The key to store in `SlackIO.store`, whose value corresponds to the last commenter on a PR.
  */
-export function prLastCommenterThreadKey(channel: string, event: IssueCommentEvent | PullRequestReviewEvent): string | undefined {
+export function prLastCommenterThreadKey(channel: string, event: IssueCommentEvent | PullRequestReviewEvent | PullRequestReadyForReviewEvent): string | undefined {
     let prUrl: string | undefined
     // IssueCommentEvent
     if (event.action === 'edited') {
@@ -212,7 +256,7 @@ export function prLastCommenterThreadKey(channel: string, event: IssueCommentEve
         console.warn("Can't handle action=edited because it is ambiguous")
         return undefined
     }
-    if (event.action === 'submitted' || event.action === 'dismissed') {
+    if (event.action === 'submitted' || event.action === 'dismissed' || event.action === 'ready_for_review') {
         prUrl = event.pull_request.url
     } else {
         prUrl = event.issue.pull_request?.url
@@ -280,6 +324,7 @@ enum CommentAction {
 
 interface PullRequestUrlWrapper {
     url: string
+    draft: boolean
 }
 
 type PullRequestUrlProvider =

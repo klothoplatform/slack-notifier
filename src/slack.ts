@@ -206,30 +206,34 @@ export class Slack {
         }
 
         const lastCommenterKey = prLastCommenterThreadKey(channel, event)
-        if (lastCommenterKey === undefined) {
-            console.info("No handler for action=", event.action)
-            return
-        }
-        const lastCommenter = await this.io.store.lastCommenter.get(lastCommenterKey)
         const commentAuthor = event.sender.login
-        if (lastCommenter === commentAuthor) {
-            console.info("Ignoring event because current commenter is last commenter", commentAuthor)
-            return
-        }
         let message: string
         switch (action) {
             case CommentAction.APPROVE:
                 message = `:approved: ${event.sender.login} approved the PR (possibly with comments).`
                 break
             case CommentAction.COMMENT:
+                if (lastCommenterKey === undefined) {
+                    console.info("No handler for action=", event.action)
+                    return
+                }
+                const lastCommenter = await this.io.store.lastCommenter.get(lastCommenterKey)
+                if (lastCommenter === commentAuthor) {
+                    console.info("Ignoring event because current commenter is last commenter", commentAuthor)
+                    return
+                }
                 message = `:reviewed: ${event.sender.login} commented on the PR.`
                 break
             case CommentAction.REQUEST_CHANGES:
-                message = `:requested-changes: ${event.sender.login} requested changes (possibly with comments).`
+                message = `:requested-changes: ${event.sender.login} requested changes.`
                 break
         }
         await this.io.sendMessage(channel, message, thread_ts)
-        await this.io.store.lastCommenter.set(lastCommenterKey, commentAuthor)
+        if (lastCommenterKey === undefined) {
+            console.warn("Couldn't determine lastCommenterKey; future comments by the same author won't be deduped")
+        } else {
+            await this.io.store.lastCommenter.set(lastCommenterKey, commentAuthor)
+        }
     }
 
     private async getBannedGithubLogins(): Promise<string[]> {

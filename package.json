@@ -12,7 +12,9 @@
     "typescript": "^4.7.4"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "klotho:build": "npm test && npx tsc && klotho dist --strict --app \"${KLOTHOBOT_APP_NAME:-klothobot}\" && (cd compiled && npm install)",
+    "klotho:deploy": "pulumi up -C compiled"
   },
   "dependencies": {
     "@slack/webhook": "^6.1.0",

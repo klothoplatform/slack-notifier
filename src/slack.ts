@@ -80,7 +80,6 @@ export class Slack {
                     event = event as IssueCommentCreatedEvent
                     await this.handleTopLevelCommentCreated(channel, event)
                 } else {
-                    event = event as PullRequestReviewCommentCreatedEvent
                     // We don't do anything with comments.
                 }
                 break

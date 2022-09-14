@@ -1,7 +1,7 @@
 {
   "devDependencies": {
     "@octokit/webhooks-types": "^6.3.5",
-    "@slack/web-api": "^6.7.2",
+    "@slack/types": "^2.7.0",
     "@types/express": "^4.17.13",
     "@types/jest": "^28.1.7",
     "jest": "^28.1.3",
@@ -13,10 +13,13 @@
   },
   "scripts": {
     "test": "jest",
-    "klotho:build": "npm test && npx tsc && klotho dist --strict --app \"${KLOTHOBOT_APP_NAME:-klothobot}\" && (cd compiled && npm install)",
+    "preklotho:build": "npm test && npx tsc",
+    "klotho:build": "klotho dist --strict --app klothobot",
+    "postklotho:build": "cd compiled && npm install",
     "klotho:deploy": "pulumi up -C compiled"
   },
   "dependencies": {
+    "@slack/bolt": "^3.12.1",
     "@slack/webhook": "^6.1.0",
     "express": "^4.18.1"
   }

@@ -312,6 +312,7 @@ class MockIO implements slack.SlackIO {
   readonly store: slack.SlackStore
   readonly sendMessage: (channel: string, text: string, thread_ts?: string) => Promise<string | undefined>
   readonly updateMessage: (channel: string, ts: string, text: string) => Promise<void>
+  readonly botId = Promise.resolve("bot_id")
 
   private mockSendMessage = jest.fn((channel: string, text: string, ts?: string) => Promise.resolve(`ts_${this.messageCount++}`))
   private mockUpdateMessage = jest.fn((channel: string, ts: string, text: string) => Promise.resolve())

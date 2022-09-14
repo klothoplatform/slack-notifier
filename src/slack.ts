@@ -7,7 +7,6 @@ import {
     PullRequestEvent,
     PullRequestOpenedEvent,
     PullRequestReadyForReviewEvent,
-    PullRequestReviewCommentCreatedEvent,
     PullRequestReviewCommentEvent,
     PullRequestReviewEvent,
     PullRequestReviewSubmittedEvent,
@@ -15,15 +14,8 @@ import {
     SimplePullRequest,
 } from '@octokit/webhooks-types';
 import { WebClient } from '@slack/web-api'
-import e = require('express');
+import { getCreds } from './slack-common'
 
-/**
- * @klotho::persist {
- *  id = "security-tokens"
- *  secret = true
- * }
- */
-import secretsFs = require("fs/promises");
 /*
  * @klotho::persist {
  *   id = "slack_ids"
@@ -38,13 +30,14 @@ let prThreads = new Map<string, string | undefined>()
  */
 let lastCommenter = new Map<string, string>()
 
-
 export class Slack {
 
     private io: SlackIO
+    readonly botId: Promise<string | undefined>
 
     constructor(io?: SlackIO) {
         this.io = io ?? createRealIO()
+        this.botId = this.io.botId
     }
 
     async handleEvent(channel: string, event: PullRequestEvent | PullRequestReviewEvent | IssueCommentEvent | PullRequestReviewCommentEvent) {
@@ -279,6 +272,7 @@ export interface SlackIO {
     readonly store: SlackStore
     readonly sendMessage: (channel: string, text: string, thread_ts?: string) => Promise<string | undefined>
     readonly updateMessage: (channel: string, ts: string, text: string) => Promise<void>
+    readonly botId: Promise<string | undefined>
 }
 
 export function quote(text: string): string {
@@ -290,15 +284,19 @@ export function quote(text: string): string {
 }
 
 function createRealIO(): SlackIO {
-    let clientPromise = secretsFs.readFile("slack_token").then(buf => {
-        let token = buf.toString('utf-8')
-        return new WebClient(token)
+    let clientPromise = getCreds().then(creds => {
+        return new WebClient(creds.token)
     })
     return {
         store: {
             prThreads: prThreads,
             lastCommenter: lastCommenter,
         },
+
+        botId: clientPromise.then(async client => {
+            const authCheck = await client.auth.test()
+            return authCheck.bot_id
+        }),
 
         async sendMessage(channel, text, thread_ts?): Promise<string | undefined> {
             let client = await clientPromise;

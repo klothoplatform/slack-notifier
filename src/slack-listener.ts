@@ -137,7 +137,7 @@ const simple = new SimpleReceiver((bolt) => {
     //     await ack("hello!")
     // })
     bolt.event('member_joined_channel', async ({event, client, logger}) => {
-        if (await channelMembershipEventAlreadyHandled(event)) {
+        if ((await channelMembershipEventAlreadyHandled(event)) ?? true) {
             return
         }
         await withBotId(client, async (botId, userId) => {
@@ -179,7 +179,7 @@ async function withBotId(client: WebClient, run: (botId: string, botUserId: stri
     return run(thisBotId, authCheck.user_id)
 }
 
-async function channelMembershipEventAlreadyHandled(event: {event_ts: string, channel: string}): Promise<boolean> {
+async function channelMembershipEventAlreadyHandled(event: {event_ts: string, channel: string}): Promise<boolean | undefined> {
     const alreadyHandled = await slackChannelEvent.get(event.channel)
     if (alreadyHandled == undefined) {
         return false
@@ -187,10 +187,12 @@ async function channelMembershipEventAlreadyHandled(event: {event_ts: string, ch
     const eventTime = parseFloat(event.event_ts)
     if (isNaN(eventTime)) {
         console.warn("couldn't parse event time; assuming event was already handled:", eventTime)
+        return undefined
     }
     if (eventTime <= alreadyHandled) {
         console.info('event was already handled at t=', alreadyHandled)
         return true
     }
+    await slackChannelEvent.set(event.channel, eventTime)
     return false
 }

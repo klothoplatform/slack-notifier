@@ -1,5 +1,6 @@
-/compiled/
+/compiled*/
 /dist/
 /node_modules/
 /src/*.js
 /coverage/
+/app-name.txt

@@ -10,6 +10,13 @@ import { WebClient } from '@slack/web-api'
 import { StringIndexed } from '@slack/bolt/dist/types/helpers'
 import { addChannel, getCreds, removeChannel } from './slack-common'
 
+/**
+ * @klotho::persist {
+ *   id = "slack_channel_events"
+ * }
+ */
+const slackChannelEvent = new Map<string, number>()
+
 class SimpleReceiver {
     private readonly bolt = getCreds().then(async creds => {
         const bolt = new SlackBolt.App({
@@ -130,17 +137,28 @@ const simple = new SimpleReceiver((bolt) => {
     //     await ack("hello!")
     // })
     bolt.event('member_joined_channel', async ({event, client, logger}) => {
-        await withBotId(client, async botId => {
-            await addChannel(botId, event.channel)
+        if ((await channelMembershipEventAlreadyHandled(event)) ?? true) {
+            return
+        }
+        await withBotId(client, async (botId, userId) => {
+            if (event.user == userId) {
+                await addChannel(botId, event.channel)
+            }
         })
     })
     bolt.event('channel_left', async ({event, client, logger}) => {
-        await withBotId(client, async botId => {
+        if (await channelMembershipEventAlreadyHandled(event)) {
+            return
+        }
+        await withBotId(client, async (botId) => {
             await removeChannel(botId, event.channel)
         })
     })
     bolt.event('group_left', async ({event, client, logger}) => {
-        await withBotId(client, async botId => {
+        if (await channelMembershipEventAlreadyHandled(event)) {
+            return
+        }
+        await withBotId(client, async (botId) => {
             await removeChannel(botId, event.channel)
         })
     })
@@ -148,15 +166,33 @@ const simple = new SimpleReceiver((bolt) => {
 export const router = express.Router()
 router.post('/slack', simple.requestHandler.bind(simple))
 
-async function withBotId(client: WebClient, run: (botId: string) => Promise<void>): Promise<void> {
+async function withBotId(client: WebClient, run: (botId: string, botUserId: string | undefined) => Promise<void>): Promise<void> {
     const authCheck = await client.auth.test({
         token: client.token,
     })
     const thisBotId = authCheck.bot_id
-    console.log("got bot id", thisBotId)
+    console.log(`got bot_id=${thisBotId} user_id=${authCheck.user_id}` , authCheck)
     if (thisBotId === undefined) {
         console.error("couldn't determine bot id; ignoring message")
         return
     }
-    return run(thisBotId)
+    return run(thisBotId, authCheck.user_id)
+}
+
+async function channelMembershipEventAlreadyHandled(event: {event_ts: string, channel: string}): Promise<boolean | undefined> {
+    const alreadyHandled = await slackChannelEvent.get(event.channel)
+    if (alreadyHandled == undefined) {
+        return false
+    }
+    const eventTime = parseFloat(event.event_ts)
+    if (isNaN(eventTime)) {
+        console.warn("couldn't parse event time; assuming event was already handled:", eventTime)
+        return undefined
+    }
+    if (eventTime <= alreadyHandled) {
+        console.info('event was already handled at t=', alreadyHandled)
+        return true
+    }
+    await slackChannelEvent.set(event.channel, eventTime)
+    return false
 }

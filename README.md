@@ -44,5 +44,5 @@ We don't have any formal contribution requirements or style guides yet for pull 
 * format your code reasonably
 * add unit tests if reasonable
 
-[tutorial]: https://klo.dev/docs-v1/tutorials/slackbot
-[config]: http://localhost:3000/docs-v1/tutorials/slackbot#building-and-deploying-the-application
+[tutorial]: https://klo.dev/docs/tutorials/slackbot
+[config]: http://klo.dev/docs/tutorials/slackbot#building-and-deploying-the-application

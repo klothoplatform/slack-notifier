@@ -10,7 +10,7 @@ To get up and running quickly, see our [installation tutorial][tutorial].
 
 ### Requirements
 
-- [Klotho CLI](https://klo.dev/docs-v1/tutorials/getting_started_with_klotho#installing-the-cli)
+- [Klotho CLI](https://klo.dev/docs/tutorials/getting_started_with_klotho#installing-the-cli)
 - Node.js 14.x+ (& NPM)
 
 ### Building

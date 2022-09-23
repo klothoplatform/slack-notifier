@@ -6,7 +6,7 @@ command_run() {
   fi
   npm test
   npx tsc
-  klotho dist --strict --app "$klotho_app_name" --outDir "$klotho_out_dir"
+  klotho dist --strict --app "$KLOTHO_APP_NAME" --outDir "$klotho_out_dir"
   npm --prefix "$klotho_out_dir" install
 }
 

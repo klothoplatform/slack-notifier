@@ -10,10 +10,7 @@
   },
   "scripts": {
     "test": "jest",
-    "preklotho:build": "npm test && npx tsc",
-    "klotho:build": "klotho dist --strict --app \"$(2>/dev/null cat ./app-name.txt || echo klothobot)\"",
-    "postklotho:build": "cd compiled && npm install",
-    "klotho:deploy": "pulumi up -C compiled"
+    "klotho": "lib/npm_scripts/klotho"
   },
   "dependencies": {
     "@slack/bolt": "^3.12.1",

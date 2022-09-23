@@ -1,0 +1,16 @@
+#!/bin/bash
+
+command_run() {
+  if [[ ! -d node_modules ]]; then
+    npm ci
+  fi
+  npm test
+  npx tsc
+  klotho dist --strict --app "$klotho_app_name" --outDir "$klotho_out_dir"
+  npm --prefix "$klotho_out_dir" install
+}
+
+command_help() {
+  echo "Builds and Klotho-compiles the app"
+}
+

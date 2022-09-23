@@ -2,6 +2,9 @@
 set -euo pipefail
 
 default_app_name=klotho-slack-notifier-bot
+if [[ -z "${KLOTHO_APP_NAME:-}" ]]; then
+  export KLOTHO_APP_NAME="$default_app_name"
+fi
 
 cd "$(dirname "$0")" # cd to where we are now
 script_home="$PWD"
@@ -47,8 +50,11 @@ case "$cmd" in
     fi
     source "$cmd_file"
 
-    klotho_app_name="$(2>/dev/null cat app-name.txt || printf "$default_app_name")"
-    klotho_out_dir="compiled-klotho/$klotho_app_name"
+    if [[ "$KLOTHO_APP_NAME" == "$default_app_name" ]]; then
+      klotho_out_dir=compiled
+    else
+      klotho_out_dir="compiled-klotho/$KLOTHO_APP_NAME"
+    fi
 
     mkdir -p "$klotho_out_dir"
     command_run "$@"

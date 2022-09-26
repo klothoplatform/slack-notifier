@@ -1,62 +1,11 @@
 #!/bin/bash
 set -euo pipefail
+source "$(dirname "$0")/_common.sh"
 
-default_app_name=klotho-slack-notifier-bot
-if [[ -z "${KLOTHO_APP_NAME:-}" ]]; then
-  export KLOTHO_APP_NAME="$default_app_name"
+if [[ ! -d node_modules ]]; then
+  npm ci
 fi
-
-cd "$(dirname "$0")" # cd to where we are now
-script_home="$PWD"
-script_prefix=cmd_
-cd ../.. # get to repo root
-
-script_path() {
-  cmd="$1"
-  printf "${script_home}/${script_prefix}${cmd}"
-}
-
-print_err() {
-  echo "$@"
-  echo ''
-  echo "Try: npm run klotho help"
-  exit 1
-}
-
-print_help() {
-  echo "Runs Klotho-related commands. Available subcommands:"
-  echo ''
-  for cmd_file in $(cd "$script_home" ; ls -1 "$script_prefix"* | sort); do
-    cmd_name="${cmd_file#'cmd_'}"
-    cmd_file="$(script_path "$cmd_name")"
-    printf '  • npm run klotho %s: %s\n' "$cmd_name" "$(source "$cmd_file" && command_help)"
-  done
-}
-
-cmd="${1:-help}"
-shift || true
-
-case "$cmd" in
-  help|--help|-h)
-    print_help
-    ;;
-  '')
-    print_err "Missing required subcommand"
-    ;;
-  *)
-    cmd_file="$(script_path "$cmd")"
-    if [[ ! -f "$cmd_file" ]]; then
-      print_err "Unrecognized command: $cmd"
-    fi
-    source "$cmd_file"
-
-    if [[ "$KLOTHO_APP_NAME" == "$default_app_name" ]]; then
-      klotho_out_dir=compiled
-    else
-      klotho_out_dir="compiled-klotho/$KLOTHO_APP_NAME"
-    fi
-
-    mkdir -p "$klotho_out_dir"
-    command_run "$@"
-    ;;
-esac
+npm test
+npx tsc
+klotho dist --strict --app "$KLOTHO_APP_NAME" --outDir "$KLOTHO_OUT_DIR"
+npm --prefix "$KLOTHO_OUT_DIR" install

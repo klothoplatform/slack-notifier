@@ -15,6 +15,7 @@ import {
 } from '@octokit/webhooks-types';
 import { WebClient } from '@slack/web-api'
 import { getCreds } from './slack-common'
+import { EmojiStore, PrEmoji } from './emoji'
 
 /*
  * @klotho::persist {
@@ -93,16 +94,20 @@ export class Slack {
 
     private async handlePrConvertedToDraft(channel: string, event: PullRequestConvertedToDraftEvent) {
         await this.onPrThread(channel, event, async (pr, prevTs) => {
-            const update = this.io.updateMessage(channel, prevTs, `:see_no_evil: DRAFT PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
-            const send = this.io.sendMessage(channel, ":see_no_evil: PR has been converted to draft", prevTs)
+            const msg = await this.topLevelMessage(pr, event.sender.login, 'draft')
+            const update = this.io.updateMessage(channel, prevTs, msg)
+            const emoji = await this.io.store.emoji.get('pr_draft')
+            const send = this.io.sendMessage(channel, `${emoji} PR has been converted to draft`, prevTs)
             await Promise.all([update, send])
         })
     }
 
     private async handlePrReadyForReview(channel: string, event: PullRequestReadyForReviewEvent) {
         await this.onPrThread(channel, event, async (pr, prevTs) => {
-            const update = this.io.updateMessage(channel, prevTs, `:pull-request: PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
-            const send = this.io.sendMessage(channel, ":pull-request: PR is ready for review", prevTs)
+            const msg = await this.topLevelMessage(pr, event.sender.login, 'opened')
+            const update = this.io.updateMessage(channel, prevTs, msg)
+            const emoji = await this.io.store.emoji.get('pr_opened')
+            const send = this.io.sendMessage(channel, `${emoji} PR is ready for review`, prevTs)
             // clear the lastCommenter, if there is one; it's considered a fresh line of commenting
             let clearLastCommenter: any
             const lastCommenterKey = prLastCommenterThreadKey(channel, event)
@@ -136,8 +141,8 @@ export class Slack {
     private async handlePrOpened(channel: string, event: PullRequestOpenedEvent) {
         console.log('handling open event')
         let pr = event.pull_request
-        const header = pr.draft ? ":see_no_evil: DRAFT" : ":pull-request:"
-        let ts = await this.io.sendMessage(channel, `${header} PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}`)
+        const msg = await this.topLevelMessage(pr, event.sender.login, pr.draft ? 'draft' : 'opened')
+        let ts = await this.io.sendMessage(channel, msg)
         await this.io.store.prThreads.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
         await this.io.sendMessage(channel, content, ts)
@@ -146,10 +151,11 @@ export class Slack {
     private async handlePrClosed(channel: string, event: PullRequestClosedEvent) {
         console.log('handling close event')
         await this.onPrThread(channel, event, async (pr, prevTs) => {
-            let mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
-            let emoji = `:${mergeVerb}:`
-            let updateTopLevelMessage = this.io.updateMessage(channel, prevTs, `${emoji} ~PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${event.sender.login}~`)
-            let postToThread = this.io.sendMessage(channel, `${emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
+            const mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
+            const emoji = await this.io.store.emoji.get(`pr_${event.pull_request.merged ? 'merged' : 'closed'}`)
+            const msg = await this.topLevelMessage(pr, event.sender.login, event.pull_request.merged ? 'merged' : 'closed')
+            let updateTopLevelMessage = this.io.updateMessage(channel, prevTs, msg)
+            let postToThread = this.io.sendMessage(channel, `${await emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
             await Promise.all([updateTopLevelMessage, postToThread])
         })
     }
@@ -202,7 +208,7 @@ export class Slack {
         let message: string
         switch (action) {
             case CommentAction.APPROVE:
-                message = `:approved: ${event.sender.login} approved the PR (possibly with comments).`
+                message = `${await this.io.store.emoji.get('comment_approved')} ${event.sender.login} approved the PR (possibly with comments).`
                 break
             case CommentAction.COMMENT:
                 if (lastCommenterKey === undefined) {
@@ -214,10 +220,10 @@ export class Slack {
                     console.info("Ignoring event because current commenter is last commenter", commentAuthor)
                     return
                 }
-                message = `:reviewed: ${event.sender.login} commented on the PR.`
+                message = `${await this.io.store.emoji.get('comment_posted')} ${event.sender.login} commented on the PR.`
                 break
             case CommentAction.REQUEST_CHANGES:
-                message = `:requested-changes: ${event.sender.login} requested changes.`
+                message = `${await this.io.store.emoji.get('comment_changes_requested')} ${event.sender.login} requested changes.`
                 break
         }
         await this.io.sendMessage(channel, message, thread_ts)
@@ -231,6 +237,13 @@ export class Slack {
     private async getBannedGithubLogins(): Promise<string[]> {
         // will eventually be configurable
         return Promise.resolve(["github-actions[bot]"])
+    }
+
+    private async topLevelMessage(pr: PullRequest, author: string, emoji: PrEmoji): Promise<string> {
+        const emojiResolved = await this.io.store.emoji.get(`pr_${emoji}`)
+        const fmt = (emoji === 'merged' || emoji === 'closed') ? "~" : ""
+        const draft = (emoji == 'draft') ? "DRAFT " : ""
+        return `${emojiResolved} ${fmt}${draft}PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${author}${fmt}`
     }
 }
 
@@ -263,9 +276,11 @@ export function prLastCommenterThreadKey(channel: string, event: IssueCommentEve
         return `${channel}_${prUrl}`
     }
 }
+
 export interface SlackStore {
     readonly prThreads: Map<string, string | undefined>
     readonly lastCommenter: Map<string, string>
+    readonly emoji: EmojiStore
 }
 
 export interface SlackIO {
@@ -291,6 +306,7 @@ function createRealIO(): SlackIO {
         store: {
             prThreads: prThreads,
             lastCommenter: lastCommenter,
+            emoji: EmojiStore.real(),
         },
 
         botId: clientPromise.then(async client => {
@@ -333,4 +349,3 @@ type PullRequestUrlProvider =
     | SimplePullRequest
     | PullRequestUrlWrapper
     ;
-

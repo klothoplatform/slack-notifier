@@ -9,6 +9,8 @@ import * as SlackBolt from '@slack/bolt'
 import { WebClient } from '@slack/web-api'
 import { StringIndexed } from '@slack/bolt/dist/types/helpers'
 import { addChannel, getCreds, removeChannel } from './slack-common'
+import {emojiConfigurePrompt, handleAction, handleSlashCommand} from "./slack-commands";
+import {emojiDescriptions} from "./emoji";
 
 /**
  * @klotho::persist {
@@ -41,7 +43,7 @@ class SimpleReceiver {
     }
 
     async requestHandler(req: express.Request, res: express.Response): Promise<void> {
-        const body = this.parseBody(req)
+        let body = this.parseBody(req)
         for (const handler of this.handlersChain) {
             if (await handler(body, res)) {
                 return
@@ -77,10 +79,10 @@ class SimpleReceiver {
             if (response === undefined) {
                 // For events, we need to not do anything, and hold off on the response until
                 // the processEvent itself is complete. Otherwise, AWS Lambda will kill us off early.
-                console.debug("undefined ack; ignoring, because this is an event")
+                console.debug("undefined ack")
                 return
             }
-            console.log("ack invoked with response", response)
+            console.log("ack invoked with response: ", JSON.stringify(response))
             if (ackCalled) {
               return;
             }
@@ -108,7 +110,7 @@ class SimpleReceiver {
         return true
     }
 
-    private parseBody(req: express.Request): object {
+    private parseBody(req: express.Request): any {
         if (Buffer.isBuffer(req.body)) {
             req.body = (req.body as Buffer).toString()
         }
@@ -116,14 +118,21 @@ class SimpleReceiver {
             case 'application/x-www-form-urlencoded':
                 console.log('parsing as x-www-form-urlencoded')
                 const urlParams = new URLSearchParams(req.body as string)
-                let  result: any = new Object()
+                const payload = urlParams.get('payload')
+                if (typeof payload === 'string') {
+                    return JSON.parse(payload)
+                }
+                let  result: any = {}
                 for (const [k, v] of urlParams.entries()) {
                     result[k] = v
                 }
                 return result
             case 'application/json':
-                console.log('parsing as json')
-                return JSON.parse(req.body)
+                if (typeof req.body === 'string') {
+                    console.log('parsing as json')
+                    return JSON.parse(req.body)
+                }
+                return req.body
             default:
                 console.error("couldn't find acceptable content type:", req.headers['content-type'])
                 throw new Error("couldn't find acceptable content type");
@@ -132,10 +141,6 @@ class SimpleReceiver {
 }
 
 const simple = new SimpleReceiver((bolt) => {
-    // If we ever need a slash command, it would work like this:
-    // bolt.command('/somecommand', async ({ack}) => {
-    //     await ack("hello!")
-    // })
     bolt.event('member_joined_channel', async ({event, client, logger}) => {
         if ((await channelMembershipEventAlreadyHandled(event)) ?? true) {
             return
@@ -161,6 +166,44 @@ const simple = new SimpleReceiver((bolt) => {
         await withBotId(client, async (botId) => {
             await removeChannel(botId, event.channel)
         })
+    })
+    bolt.action(/.*/, async ({payload, action, body, ack, respond}) => {
+        const actionResult = await handleAction(action)
+        let response: SlackBolt.RespondArguments = {
+            text: "There may have been an error, but I'm not sure. Try to confirm whether your action took effect.",
+            response_type: "ephemeral",
+        }
+        switch (actionResult?.type) {
+            case 'configure_emoji':
+                response = {
+                    replace_original: true,
+                    blocks: [
+                        {
+                            type: 'section',
+                            text: {
+                                type: 'mrkdwn',
+                                text: emojiConfigurePrompt(actionResult?.newValue),
+                            }
+                        },
+                        {
+                          type: 'context',
+                          elements: [
+                              {
+                                  type: 'plain_text',
+                                  text: 'Success',
+                              }
+                          ]
+                        },
+                    ],
+                }
+            break
+        }
+        await respond(response)
+        await ack()
+    })
+    bolt.command(/.*/, async ({command, ack}) => {
+        const result = await handleSlashCommand(command.command, command.text)
+        await ack(result)
     })
 })
 export const router = express.Router()

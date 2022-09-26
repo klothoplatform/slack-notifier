@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "jest",
-    "klotho": "lib/npm_scripts/klotho"
+    "klotho": "lib/npm_scripts/klotho",
+    "pulumi": "lib/npm_scripts/pulumi"
   },
   "dependencies": {
     "@slack/bolt": "^3.12.1",

@@ -1,9 +1,0 @@
-#!/bin/bash
-
-command_run() {
-  pulumi -C "$klotho_out_dir" --stack "$KLOTHO_APP_NAME" "$@"
-}
-
-command_help() {
-  echo 'Runs a Pulumi command using the correct stack and directory.'
-}

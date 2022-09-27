@@ -1,0 +1,75 @@
+name: Klotho
+on:
+  push:
+    branches: [main]
+
+env:
+  # Set this to your preferred AWS region
+  AWS_REGION: us-west-2
+  # Set your application name. Changing this will orphan the previous 
+  # deployment and proceed with a new one.
+  # Change with caution, if you have already deployed.
+  APP_NAME: klotho-slack-notifier-bot
+  # Set this to the email you used to register with Klotho
+  KLOTHO_EMAIL: yuval.shavit@klo.dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Input checks
+      run: |
+        function err() { echo "::error title=Missing workflow configuration ::$@" ; touch FAIL ; }
+        [[ "$AWS_REGION" != '<region>' ]] || err 'Please set your region in the workflows tab.'
+        [[ "$APP_NAME" != '<app name>' ]] || err 'Please set your app name in the workflows tab.'
+        [[ "$KLOTHO_EMAIL" != '<email>' ]] || err 'Please set your email in the workflows tab.'
+        [[ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]] || err 'Please add an AWS_ACCESS_KEY_ID secret to your repository.'
+        [[ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]] || err 'Please add an AWS_SECRET_ACCESS_KEY secret to your repository.'
+        [[ -n "${{ secrets.PULUMI_ACCESS_TOKEN }}" ]] || err 'Please add an PULUMI_ACCESS_TOKEN secret to your repository.'
+        if [[ -f FAIL ]] ; then exit 1 ; fi
+    - uses: actions/checkout@v2
+    - name: Use Node.js 16.x
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16.x
+        cache: "npm"
+        cache-dependency-path: package-lock.json
+    - name: Build
+      run: |
+        npm ci
+        npx tsc
+    - name: Install Klotho 
+      run: |
+        curl -fsSL http://srv.klo.dev/update/latest/linux/amd64 -o "$RUNNER_TEMP/klotho"
+        chmod +x "$RUNNER_TEMP/klotho"
+        "$RUNNER_TEMP/klotho" --login "$KLOTHO_EMAIL"
+    - name: Klotho compile
+      run: |
+        "$RUNNER_TEMP/klotho" . --app "$APP_NAME"
+    - name: Install pulumi
+      run: curl -fsSL https://get.pulumi.com | sh
+    - name: Pulumi secrets
+      run: |
+        echo "$SLACK_TOKEN" > compiled/slack_token
+        echo "$SLACK_SIGNING_SECRET" > compiled/slack_signing_secret
+      env:
+        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        PULUMI_CONFIG_PASSPHRASE: ""
+        SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+        SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+    - name: Install compiled dependencies
+      run: npm install
+      working-directory: ./compiled
+    - name: Pulumi deploy
+      run: |
+        pulumi -C compiled -s "$APP_NAME" stack select --create
+        pulumi -C compiled -s "$APP_NAME" config set aws:region "${AWS_REGION}" 
+        pulumi -C compiled -s "$APP_NAME" refresh --yes
+        pulumi -C compiled -s "$APP_NAME" up --yes
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        PULUMI_CONFIG_PASSPHRASE: ""

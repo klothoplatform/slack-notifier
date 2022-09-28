@@ -68,6 +68,11 @@ jobs:
         pulumi -C compiled -s "$APP_NAME" config set aws:region "${AWS_REGION}" 
         pulumi -C compiled -s "$APP_NAME" refresh --yes
         pulumi -C compiled -s "$APP_NAME" up --yes
+
+        pulumi_out="$(pulumi -C compiled -s "$APP_NAME" stack output --json)"
+        for key in $(echo "$pulumi_out" | jq -r '. | keys[]') ; do
+          echo "$pulumi_out" | jq -r '.[$key]' --arg key "$key" | sed "s/^/::notice title=$key::/"
+        done
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

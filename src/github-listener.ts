@@ -4,7 +4,7 @@
  * }
  */
 
-import express from 'express';
+import express = require('express')
 import { Slack } from './slack'
 import { IssueCommentEvent, PingEvent, PullRequestEvent } from "@octokit/webhooks-types";
 import { getChannels } from './slack-common';

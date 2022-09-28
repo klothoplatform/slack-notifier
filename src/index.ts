@@ -1,4 +1,4 @@
-import express from 'express';
+import express = require('express')
 import { router as ghListener } from './github-listener'
 import { router as slackListener } from './slack-listener'
 

@@ -4,7 +4,7 @@
  * }
  */
 
-import express from 'express'
+import express = require('express')
 import * as SlackBolt from '@slack/bolt'
 import { WebClient } from '@slack/web-api'
 import { StringIndexed } from '@slack/bolt/dist/types/helpers'

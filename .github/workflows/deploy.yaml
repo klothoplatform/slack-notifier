@@ -46,8 +46,6 @@ jobs:
     - name: Klotho compile
       run: |
         "$RUNNER_TEMP/klotho" . --app "$APP_NAME"
-    - name: Install pulumi
-      run: curl -fsSL https://get.pulumi.com | sh
     - name: Pulumi secrets
       run: |
         echo "$SLACK_TOKEN" > compiled/slack_token

@@ -10,30 +10,34 @@ To get up and running quickly, see our [installation tutorial][tutorial].
 
 ### Requirements
 
-- [Klotho CLI](https://klo.dev/docs/tutorials/getting_started_with_klotho#installing-the-cli)
+- [Klotho CLI](https://klo.dev/docs/tutorials/built_with_klotho/slackbot)
 - Node.js 14.x+ (& NPM)
 
 ### Building
 
-Just once (or whenever we add new dependencies):
-
 ```bash
-npm install
+npm run klotho build
 ```
 
-Then, to build:
-
-```bash
-npm run klotho:build
-```
+This will compile the TypeScript, run the tests, and run Klotho on the application.
 
 ### Deploying
 
-Assuming you [have your Pulumi stack configured][config]:
+1. Just once, run:
 
-```bash
-npm run klotho:deploy
-```
+   ```bash
+   npm run klotho pulumi config set aws:region <YOUR DESIRED REGION> # e.g. us-east-1
+   ```
+2. Make sure you have your env set up with AWS credentials (see [our tutorial][tutorial-aws].
+3. ```bash
+   npm run klotho pulumi up
+   ```
+
+### Different application names
+
+By default, the Klotho application name (`klotho --app ...`) is `klotho-slack-notifier-bot`, and Klotho will compile to a directory `./compiled`.
+
+To change this, set an env variable `KLOTHO_APP_NAME`. If you do, the application name will be what you set in that variable, and Klotho will compile to `./compiled-klotho/$KLOTHO_APP_NAME`.
 
 # Contributing
 
@@ -45,4 +49,4 @@ We don't have any formal contribution requirements or style guides yet for pull 
 * add unit tests if reasonable
 
 [tutorial]: https://klo.dev/docs/tutorials/slackbot
-[config]: http://klo.dev/docs/tutorials/slackbot#building-and-deploying-the-application
+[tutorial-aws]: http://klo.dev/docs/tutorials/built_with_klotho/slackbot#prerequisites

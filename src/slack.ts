@@ -306,6 +306,8 @@ function createRealIO(): SlackIO {
                 text: text,
                 mrkdwn: true,
                 thread_ts: thread_ts,
+                unfurl_links: false,
+                unfurl_media: false,
             })
             return response.ts
         },

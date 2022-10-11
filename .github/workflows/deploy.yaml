@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch: {}
+concurrency:
+  cancel-in-progress: false
+  group: pulumi-deploy
 
 env:
   # Set this to your preferred AWS region
@@ -56,6 +59,11 @@ jobs:
       run: |
         echo "$SLACK_TOKEN" > compiled/slack_token
         echo "$SLACK_SIGNING_SECRET" > compiled/slack_signing_secret
+        ls compiled/
+        if [[ ! ( -s compiled/slack_token && -s compiled/slack_signing_secret ) ]]; then
+          echo >2 "Secrets files were empty!"
+          exit 1
+        fi
       env:
         PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

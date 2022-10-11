@@ -59,7 +59,7 @@ jobs:
       run: |
         echo "$SLACK_TOKEN" > compiled/slack_token
         echo "$SLACK_SIGNING_SECRET" > compiled/slack_signing_secret
-        ls compiled/
+        ls -l compiled/
         if [[ ! ( -s compiled/slack_token && -s compiled/slack_signing_secret ) ]]; then
           echo >2 "Secrets files were empty!"
           exit 1

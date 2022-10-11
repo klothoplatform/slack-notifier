@@ -36,11 +36,11 @@ jobs:
         [[ -n "${{ secrets.SLACK_SIGNING_SECRET }}" ]] || err 'Please add an SLACK_SIGNING_SECRET secret to your repository.'
         
         if [[ -f FAIL ]] ; then exit 1 ; fi
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Use Node.js 16.x
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
-        node-version: 16.x
+        node-version: 16
         cache: "npm"
         cache-dependency-path: package-lock.json
     - name: Build

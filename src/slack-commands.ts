@@ -41,7 +41,7 @@ export function parseEmojiCommand(command: String): {image: string} | {err: stri
     if (fullLine === null) {
         return {err: "Unrecognized command"} // not expected!
     }
-    if ((fullLine.groups?.extra)?.length > 0) {
+    if ((fullLine.groups?.extra ?? "").length > 0) {
         return {err: "Command may contain one optional `:image:`, and nothing else."}
     }
     if (fullLine.groups?.images === undefined) {

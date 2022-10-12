@@ -10,29 +10,23 @@ import {PlainTextOption} from "@slack/types";
 
 type Action = DialogSubmitAction | WorkflowStepEdit | InteractiveAction | BlockElementAction
 
-export async function handleAction(action: Action): Promise<ActionResult | undefined> {
+export async function handleConfigureEmojiAction(action: Action): Promise<ConfigureEmojiResult | undefined> {
     if (action.type === 'static_select') {
-        if (action.action_id === 'configure_emoji') {
-            const newEmoji = action.block_id
-            const forWhich = action.selected_option.value as EmojiKey
-            await EmojiStore.real().set(forWhich, newEmoji)
-            return {
-                type: "configure_emoji",
-                newValue: newEmoji,
-            }
+        const newEmoji = action.block_id
+        const forWhich = action.selected_option.value as EmojiKey
+        await EmojiStore.real().set(forWhich, newEmoji)
+        return {
+            emoji: forWhich,
+            image: newEmoji,
         }
     } else {
         console.log("unknown action: ", action.type)
     }
-    return
 }
 
-type ActionResult =
-    | ConfigureEmojiResult
-
-interface ConfigureEmojiResult {
-    type: 'configure_emoji'
-    newValue: string,
+export interface ConfigureEmojiResult {
+    emoji: EmojiKey,
+    image: string,
 }
 
 /**
@@ -47,7 +41,7 @@ export function parseEmojiCommand(command: String): {image: string} | {err: stri
     if (fullLine === null) {
         return {err: "Unrecognized command"} // not expected!
     }
-    if ((fullLine.groups?.extra ?? "").length > 0) {
+    if ((fullLine.groups?.extra)?.length > 0) {
         return {err: "Command may contain one optional `:image:`, and nothing else."}
     }
     if (fullLine.groups?.images === undefined) {

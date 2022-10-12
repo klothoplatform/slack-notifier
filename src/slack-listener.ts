@@ -9,7 +9,7 @@ import * as SlackBolt from '@slack/bolt'
 import { WebClient } from '@slack/web-api'
 import { StringIndexed } from '@slack/bolt/dist/types/helpers'
 import { addChannel, getCreds, removeChannel } from './slack-common'
-import {emojiConfigurePrompt, handleAction, handleSlashCommand} from "./slack-commands";
+import {emojiConfigurePrompt, handleConfigureEmojiAction, handleSlashCommand} from "./slack-commands";
 import {emojiDescriptions} from "./emoji";
 
 /**
@@ -141,7 +141,7 @@ class SimpleReceiver {
 }
 
 const simple = new SimpleReceiver((bolt) => {
-    bolt.event('member_joined_channel', async ({event, client, logger}) => {
+    bolt.event('member_joined_channel', async ({event, client}) => {
         if ((await channelMembershipEventAlreadyHandled(event)) ?? true) {
             return
         }
@@ -151,7 +151,7 @@ const simple = new SimpleReceiver((bolt) => {
             }
         })
     })
-    bolt.event('channel_left', async ({event, client, logger}) => {
+    bolt.event('channel_left', async ({event, client}) => {
         if (await channelMembershipEventAlreadyHandled(event)) {
             return
         }
@@ -159,7 +159,7 @@ const simple = new SimpleReceiver((bolt) => {
             await removeChannel(botId, event.channel)
         })
     })
-    bolt.event('group_left', async ({event, client, logger}) => {
+    bolt.event('group_left', async ({event, client}) => {
         if (await channelMembershipEventAlreadyHandled(event)) {
             return
         }
@@ -167,40 +167,57 @@ const simple = new SimpleReceiver((bolt) => {
             await removeChannel(botId, event.channel)
         })
     })
-    bolt.action(/.*/, async ({payload, action, body, ack, respond}) => {
-        const actionResult = await handleAction(action)
+    bolt.action('configure_emoji', async ({action, ack, respond}) => {
+        const actionResult = await handleConfigureEmojiAction(action)
         let response: SlackBolt.RespondArguments = {
             text: "There may have been an error, but I'm not sure. Try to confirm whether your action took effect.",
             response_type: "ephemeral",
         }
-        switch (actionResult?.type) {
-            case 'configure_emoji':
-                response = {
-                    replace_original: true,
-                    blocks: [
-                        {
-                            type: 'section',
-                            text: {
+        if (actionResult !== undefined) {
+            response = {
+                replace_original: true,
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: emojiConfigurePrompt(actionResult.image),
+                        }
+                    },
+                    {
+                        type: 'context',
+                        elements: [
+                            {
                                 type: 'mrkdwn',
-                                text: emojiConfigurePrompt(actionResult?.newValue),
+                                text: `Success: ${actionResult.image} ${emojiDescriptions[actionResult.emoji]}`,
                             }
-                        },
-                        {
-                          type: 'context',
-                          elements: [
-                              {
-                                  type: 'plain_text',
-                                  text: 'Success',
-                              }
-                          ]
-                        },
-                    ],
-                }
-            break
+                        ]
+                    },
+                ],
+            }
         }
         await respond(response)
         await ack()
     })
+    // bolt.command(...) handles slash commands. We'll set up just single command, with subcommands within that.
+    // The command name itself is configured within the Slack app settings (https://api.slack.com/apps/), and is out
+    // of our control in this code base.
+    //
+    // In other words, even though we accept any command, we actually expect that there'll just be a single command
+    // that always gets used for any given instance of this app. We just don't know what it is.
+    //
+    // Doing it this way has three main advantages:
+    // 1) Easier setup for app administrators: they only need to configure a single command endpoint
+    // 2) Easier discoverability for users: they only have to remember a single slash command, and we can give them help
+    //    from there.
+    // 3) Removes slash command conflicts: slash-commands aren't namespaced, so every command name needs to be unique
+    //    within a workspace. Given that, our approach has two main benefits: (a) it lowers the chance of conflict, by
+    //    providing only one command; and (b) it lets the app admin pick any command name they want, so that if there is
+    //    a conflict, they can easily resolve it by just picking a different command.
+    //
+    // The `command.command` property holds the slash command. We don't use this for any logic; it's just there so that
+    // if we need to display help text to the user, we can include slash command. Something like, "to do the foo,
+    // use `/${command.command} foo`."
     bolt.command(/.*/, async ({command, ack}) => {
         const result = await handleSlashCommand(command.command, command.text)
         await ack(result)

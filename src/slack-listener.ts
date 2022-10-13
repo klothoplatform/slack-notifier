@@ -9,6 +9,8 @@ import * as SlackBolt from '@slack/bolt'
 import { WebClient } from '@slack/web-api'
 import { StringIndexed } from '@slack/bolt/dist/types/helpers'
 import { addChannel, getCreds, removeChannel } from './slack-common'
+import {emojiConfigurePrompt, handleConfigureEmojiAction, handleSlashCommand} from "./slack-commands";
+import {emojiDescriptions} from "./emoji";
 
 /**
  * @klotho::persist {
@@ -41,7 +43,7 @@ class SimpleReceiver {
     }
 
     async requestHandler(req: express.Request, res: express.Response): Promise<void> {
-        const body = this.parseBody(req)
+        let body = this.parseBody(req)
         for (const handler of this.handlersChain) {
             if (await handler(body, res)) {
                 return
@@ -77,10 +79,10 @@ class SimpleReceiver {
             if (response === undefined) {
                 // For events, we need to not do anything, and hold off on the response until
                 // the processEvent itself is complete. Otherwise, AWS Lambda will kill us off early.
-                console.debug("undefined ack; ignoring, because this is an event")
+                console.debug("undefined ack")
                 return
             }
-            console.log("ack invoked with response", response)
+            console.log("ack invoked with response: ", JSON.stringify(response))
             if (ackCalled) {
               return;
             }
@@ -108,7 +110,7 @@ class SimpleReceiver {
         return true
     }
 
-    private parseBody(req: express.Request): object {
+    private parseBody(req: express.Request): any {
         if (Buffer.isBuffer(req.body)) {
             req.body = (req.body as Buffer).toString()
         }
@@ -116,14 +118,21 @@ class SimpleReceiver {
             case 'application/x-www-form-urlencoded':
                 console.log('parsing as x-www-form-urlencoded')
                 const urlParams = new URLSearchParams(req.body as string)
-                let  result: any = new Object()
+                const payload = urlParams.get('payload')
+                if (typeof payload === 'string') {
+                    return JSON.parse(payload)
+                }
+                let  result: any = {}
                 for (const [k, v] of urlParams.entries()) {
                     result[k] = v
                 }
                 return result
             case 'application/json':
-                console.log('parsing as json')
-                return JSON.parse(req.body)
+                if (typeof req.body === 'string') {
+                    console.log('parsing as json')
+                    return JSON.parse(req.body)
+                }
+                return req.body
             default:
                 console.error("couldn't find acceptable content type:", req.headers['content-type'])
                 throw new Error("couldn't find acceptable content type");
@@ -132,11 +141,7 @@ class SimpleReceiver {
 }
 
 const simple = new SimpleReceiver((bolt) => {
-    // If we ever need a slash command, it would work like this:
-    // bolt.command('/somecommand', async ({ack}) => {
-    //     await ack("hello!")
-    // })
-    bolt.event('member_joined_channel', async ({event, client, logger}) => {
+    bolt.event('member_joined_channel', async ({event, client}) => {
         if ((await channelMembershipEventAlreadyHandled(event)) ?? true) {
             return
         }
@@ -146,7 +151,7 @@ const simple = new SimpleReceiver((bolt) => {
             }
         })
     })
-    bolt.event('channel_left', async ({event, client, logger}) => {
+    bolt.event('channel_left', async ({event, client}) => {
         if (await channelMembershipEventAlreadyHandled(event)) {
             return
         }
@@ -154,13 +159,70 @@ const simple = new SimpleReceiver((bolt) => {
             await removeChannel(botId, event.channel)
         })
     })
-    bolt.event('group_left', async ({event, client, logger}) => {
+    bolt.event('group_left', async ({event, client}) => {
         if (await channelMembershipEventAlreadyHandled(event)) {
             return
         }
         await withBotId(client, async (botId) => {
             await removeChannel(botId, event.channel)
         })
+    })
+    bolt.action('configure_emoji', async ({action, ack, respond}) => {
+        const actionResult = await handleConfigureEmojiAction(action)
+        let response: SlackBolt.RespondArguments = {
+            text: "There may have been an error, but I'm not sure. Try to confirm whether your action took effect.",
+            response_type: "ephemeral",
+        }
+        if (actionResult !== undefined) {
+            response = {
+                replace_original: true,
+                blocks: [
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: emojiConfigurePrompt(actionResult.image),
+                        }
+                    },
+                    {
+                        type: 'context',
+                        elements: [
+                            {
+                                type: 'mrkdwn',
+                                text: `Success: ${actionResult.image} ${emojiDescriptions[actionResult.emoji]}`,
+                            }
+                        ]
+                    },
+                ],
+            }
+        }
+        await respond(response)
+        await ack()
+    })
+    // bolt.command(...) handles slash commands. We'll set up just single command, with subcommands within that.
+    // The command name itself is configured within the Slack app settings (https://api.slack.com/apps/), and is out
+    // of our control in this code base.
+    //
+    // If you use the manifest defined in slack-app-manifest.json, this will be `/github-notifications` by default.
+    //
+    // In other words, even though we accept any command, we actually expect that there'll just be a single command
+    // that always gets used for any given instance of this app. We just don't know what it is.
+    //
+    // Doing it this way has three main advantages:
+    // 1) Easier setup for app administrators: they only need to configure a single command endpoint
+    // 2) Easier discoverability for users: they only have to remember a single slash command, and we can give them help
+    //    from there.
+    // 3) Removes slash command conflicts: slash-commands aren't namespaced, so every command name needs to be unique
+    //    within a workspace. Given that, our approach has two main benefits: (a) it lowers the chance of conflict, by
+    //    providing only one command; and (b) it lets the app admin pick any command name they want, so that if there is
+    //    a conflict, they can easily resolve it by just picking a different command.
+    //
+    // The `command.command` property holds the slash command. We don't use this for any logic; it's just there so that
+    // if we need to display help text to the user, we can include slash command. Something like, "to do the foo,
+    // use `/${command.command} foo`."
+    bolt.command(/.*/, async ({command, ack}) => {
+        const result = await handleSlashCommand(command.command, command.text)
+        await ack(result)
     })
 })
 export const router = express.Router()

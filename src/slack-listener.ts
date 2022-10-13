@@ -203,6 +203,8 @@ const simple = new SimpleReceiver((bolt) => {
     // The command name itself is configured within the Slack app settings (https://api.slack.com/apps/), and is out
     // of our control in this code base.
     //
+    // If you use the manifest defined in slack-app-manifest.json, this will be `/github-notifications` by default.
+    //
     // In other words, even though we accept any command, we actually expect that there'll just be a single command
     // that always gets used for any given instance of this app. We just don't know what it is.
     //

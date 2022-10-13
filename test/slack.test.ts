@@ -1,6 +1,7 @@
 import * as gh from '@octokit/webhooks-types';
 import * as slack from '../src/slack'
 import { createMock } from 'ts-auto-mock';
+import {EmojiStore} from "../src/emoji";
 
 describe('GH to slack formatting', () => {
   test('simple newline', () => {
@@ -63,6 +64,7 @@ describe.each([
       let client = new slack.Slack(io)
       let request = createMock<gh.PullRequestOpenedEvent>()
       request.pull_request = {
+        // @ts-ignore
         ...request.pull_request,
         number: 123,
         title: "My Cool Title",
@@ -75,7 +77,7 @@ describe.each([
       request.sender.login = "eagle"
       await client.handleEvent("mychannel", request)
       const expectPost = readyToReview
-        ? ':pull-request: PR <pr-url|#123: My Cool Title> (+111/-222) by eagle'
+        ? ':eight_pointed_black_star: PR <pr-url|#123: My Cool Title> (+111/-222) by eagle'
         : ':see_no_evil: DRAFT PR <pr-url|#123: My Cool Title> (+111/-222) by eagle'
       io.check({
         messagesSent: [
@@ -125,6 +127,7 @@ describe.each([
       const client = new slack.Slack(io)
       const request = createMock<gh.PullRequestConvertedToDraftEvent>()
       request.pull_request = {
+        // @ts-ignore
         ...request.pull_request,
         number: 123,
         title: "My PR",
@@ -148,6 +151,7 @@ describe.each([
       const client = new slack.Slack(io)
       const request = createMock<gh.PullRequestReadyForReviewEvent>()
       request.pull_request = {
+        // @ts-ignore
         ...request.pull_request,
         number: 123,
         title: "My PR",
@@ -160,8 +164,8 @@ describe.each([
       io.store.prThreads.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
       await client.handleEvent("mychannel", request)
       io.check({
-        messagesSent: [['mychannel', ":pull-request: PR is ready for review", 't0']],
-        messagesUpdated: [['mychannel', 't0', ':pull-request: PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle']],
+        messagesSent: [['mychannel', ":eight_pointed_black_star: PR is ready for review", 't0']],
+        messagesUpdated: [['mychannel', 't0', ':eight_pointed_black_star: PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle']],
         lastCommenter: new Map([
           [{ channel: 'mychannel', pr_url: 'https://api.example.com/pr/123' }, ''] // resets the lastCommenter for this channel + pr
         ]),
@@ -173,11 +177,11 @@ describe.each([
     describe.each([
       // e.g.: "for top-level comments (===undefined)", if this message was after the same user just commented or if this PR is in draft,
       // expect no messages; otherwise, expect a single message saying that eagle commented on the PR"
-      [undefined, afterSameUserJustCommented || isDraft ? [] : [":reviewed: eagle commented on the PR."]],
-      ["commented", afterSameUserJustCommented || isDraft ? [] : [":reviewed: eagle commented on the PR."]],
+      [undefined, afterSameUserJustCommented || isDraft ? [] : [":speech_balloon: eagle commented on the PR."]],
+      ["commented", afterSameUserJustCommented || isDraft ? [] : [":speech_balloon: eagle commented on the PR."]],
       // Changed-requested and approves always get sent for non-draft PRs, even if it was the same commenter as the last message.
-      ["changes_requested", isDraft ? [] : [":requested-changes: eagle requested changes."]],
-      ["approved", isDraft ? [] : [":approved: eagle approved the PR (possibly with comments)."]],
+      ["changes_requested", isDraft ? [] : [":exclamation: eagle requested changes."]],
+      ["approved", isDraft ? [] : [":white_check_mark: eagle approved the PR (possibly with comments)."]],
     ])(`afterSameUserJustCommented: ${afterSameUserJustCommented}`, (reviewAction, wantComment) => {
       test((reviewAction === undefined) ? "issue comment" : `PR ${reviewAction}`, async () => {
         const io = new MockIO()
@@ -254,8 +258,8 @@ describe.each([
       io.store.prThreads.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
       await client.handleEvent("mychannel", request)
       io.check({
-        messagesSent: [['mychannel', ":closed: PR was closed by eagle", 't0']],
-        messagesUpdated: [['mychannel', 't0', ':closed: ~PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle~']],
+        messagesSent: [['mychannel', ":x: PR was closed by eagle", 't0']],
+        messagesUpdated: [['mychannel', 't0', ':x: ~PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle~']],
         lastCommenter: new Map(),
       })
     })
@@ -278,8 +282,8 @@ describe.each([
       io.store.prThreads.set(slack.prThreadKey("mychannel", request.pull_request), "t0")
       await client.handleEvent("mychannel", request)
       io.check({
-        messagesSent: [['mychannel', ":merged: PR was merged by eagle", 't0']],
-        messagesUpdated: [['mychannel', 't0', ':merged: ~PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle~']],
+        messagesSent: [['mychannel', ":rocket: PR was merged by eagle", 't0']],
+        messagesUpdated: [['mychannel', 't0', ':rocket: ~PR <https://example.com/pr/123|#123: My PR> (+222/-333) by eagle~']],
         lastCommenter: new Map(),
       })
     })
@@ -321,6 +325,7 @@ class MockIO implements slack.SlackIO {
     this.store = {
       prThreads: new Map<string, string | undefined>(),
       lastCommenter: new Map<string, string>(),
+      emoji: EmojiStore.test(),
     }
     this.sendMessage = this.mockSendMessage
     this.updateMessage = this.mockUpdateMessage

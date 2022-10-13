@@ -112,8 +112,24 @@ export async function handleSlashCommand(commandName: string, commandText: strin
         }
     } else {
         return {
-            text: `Unrecognized command.\nTry \`/${commandName} emoji :<emoji>:\` to configure the emoji for GitHub actions.\nFor example:\n>/${commandName} emoji :rocket:`,
-            mrkdwn: true,
+            blocks: [
+                {
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `Unrecognized command.\nTry \`${commandName} emoji :<emoji>:\` to configure the emoji for GitHub actions.\nFor example:\n>${commandName} emoji :rocket:`,
+                    },
+                },
+                {
+                    type: 'context',
+                    elements: [
+                        {
+                            type: 'plain_text',
+                            text: `Failed command: ${commandName} ${commandText}`,
+                        }
+                    ]
+                },
+            ]
         }
     }
 }

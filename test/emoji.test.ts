@@ -1,3 +1,7 @@
+/**
+ * @group integration
+ */
+
 import {emojiDescriptions, EmojiStore} from '../src/emoji'
 
 test('get defaulted value', async () => {

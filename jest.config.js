@@ -2,6 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  runner: "groups",
   transform: {
     '.(ts|tsx)': 'ts-jest'
   },

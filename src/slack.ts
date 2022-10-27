@@ -13,9 +13,9 @@ import {
     PullRequestSynchronizeEvent,
     SimplePullRequest,
 } from '@octokit/webhooks-types';
-import { WebClient } from '@slack/web-api'
-import { getCreds } from './slack-common'
-import { EmojiStore, PrEmoji } from './emoji'
+import {WebClient} from '@slack/web-api'
+import {getCreds} from './slack-common'
+import {EmojiStore, PrEmoji} from "./emoji";
 
 /*
  * @klotho::persist {
@@ -33,7 +33,7 @@ let lastCommenter = new Map<string, string>()
 
 export class Slack {
 
-    private io: SlackIO
+    private readonly io: SlackIO
     readonly botId: Promise<string | undefined>
 
     constructor(io?: SlackIO) {
@@ -93,20 +93,14 @@ export class Slack {
     }
 
     private async handlePrConvertedToDraft(channel: string, event: PullRequestConvertedToDraftEvent) {
-        await this.onPrThread(channel, event, async (pr, prevTs) => {
-            const msg = await this.topLevelMessage(pr, event.sender.login, 'draft')
-            await this.io.updateMessage(channel, prevTs, msg)
-            const emoji = await this.io.store.emoji.get('pr_draft')
-            await this.io.sendMessage(channel, `${emoji} PR has been converted to draft`, prevTs)
+        await this.onPrThread(channel, event, async (actions) => {
+            await actions.replyToThread('PR has been converted to draft', 'draft')
         })
     }
 
     private async handlePrReadyForReview(channel: string, event: PullRequestReadyForReviewEvent) {
-        await this.onPrThread(channel, event, async (pr, prevTs) => {
-            const msg = await this.topLevelMessage(pr, event.sender.login, 'opened')
-            await this.io.updateMessage(channel, prevTs, msg)
-            const emoji = await this.io.store.emoji.get('pr_opened')
-            const send = this.io.sendMessage(channel, `${emoji} PR is ready for review`, prevTs)
+        await this.onPrThread(channel, event, async (actions) => {
+            const send = actions.replyToThread('PR is ready for review', 'opened')
             // clear the lastCommenter, if there is one; it's considered a fresh line of commenting
             let clearLastCommenter: any
             const lastCommenterKey = prLastCommenterThreadKey(channel, event)
@@ -122,7 +116,7 @@ export class Slack {
             console.log('ignoring PR because it is in draft mode')
             return
         }
-        var action: CommentAction
+        let action: CommentAction;
         switch (event.review.state) {
             case 'approved':
                 action = CommentAction.APPROVE
@@ -140,7 +134,7 @@ export class Slack {
     private async handlePrOpened(channel: string, event: PullRequestOpenedEvent) {
         console.log('handling open event')
         let pr = event.pull_request
-        const msg = await this.topLevelMessage(pr, event.sender.login, pr.draft ? 'draft' : 'opened')
+        const msg = await topLevelMessage(pr, event.sender.login, pr.draft ? 'draft' : 'opened', this.io.store.emoji)
         let ts = await this.io.sendMessage(channel, msg)
         await this.io.store.prThreads.set(prThreadKey(channel, pr), ts)
         let content = (pr.body == null) ? "No description provided" : `PR description:\n${quote(pr.body)}`
@@ -149,12 +143,9 @@ export class Slack {
 
     private async handlePrClosed(channel: string, event: PullRequestClosedEvent) {
         console.log('handling close event')
-        await this.onPrThread(channel, event, async (pr, prevTs) => {
+        await this.onPrThread(channel, event, async (actions) => {
             const mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
-            const emoji = this.io.store.emoji.get(`pr_${event.pull_request.merged ? 'merged' : 'closed'}`)
-            const msg = await this.topLevelMessage(pr, event.sender.login, event.pull_request.merged ? 'merged' : 'closed')
-            await this.io.updateMessage(channel, prevTs, msg)
-            await this.io.sendMessage(channel, `${await emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
+            await actions.replyToThread(`PR was ${mergeVerb} by ${actions.actorLogin}`, mergeVerb)
         })
     }
 
@@ -164,7 +155,7 @@ export class Slack {
             console.log('ignoring PR because it is in draft mode')
             return
         }
-        await this.onPrThread(channel, event, async (pr, thread_ts) => {
+        await this.onPrThread(channel, event, async (actions) => {
             let syncEvent = event as PullRequestSynchronizeEvent
             let beforeShort = syncEvent.before
             let afterShort = syncEvent.after
@@ -175,16 +166,16 @@ export class Slack {
                     break
                 }
             }
-            let msg = `PR updated: <${pr.html_url}/files/${syncEvent.before}..${syncEvent.after}|${beforeShort}..${afterShort}>`
-            await this.io.sendMessage(channel, msg, thread_ts)
+            let msg = `PR updated: <${actions.pr.html_url}/files/${syncEvent.before}..${syncEvent.after}|${beforeShort}..${afterShort}>`
+            await actions.replyToThread(msg)
         })
     }
 
-    private async onPrThread(channel: string, event: PullRequestEvent, action: (pr: PullRequest, thread_ts: string) => Promise<void>) {
+    private async onPrThread(channel: string, event: PullRequestEvent, handler: (actions: PrThreadActions) => Promise<void>) {
         let pr = event.pull_request
         let thread_ts = await this.io.store.prThreads.get(prThreadKey(channel, pr))
         if (typeof thread_ts === 'string') {
-            await action(pr, thread_ts)
+            await handler(new PrThreadActions(event.sender.login, event.pull_request, this.io, channel, thread_ts))
         } else {
             console.warn("no previous ts found for pr", pr)
         }
@@ -235,13 +226,6 @@ export class Slack {
     private async getBannedGithubLogins(): Promise<string[]> {
         // will eventually be configurable
         return Promise.resolve(["github-actions[bot]"])
-    }
-
-    private async topLevelMessage(pr: PullRequest, author: string, emoji: PrEmoji): Promise<string> {
-        const emojiResolved = await this.io.store.emoji.get(`pr_${emoji}`)
-        const fmt = (emoji === 'merged' || emoji === 'closed') ? "~" : ""
-        const draft = (emoji == 'draft') ? "DRAFT " : ""
-        return `${emojiResolved} ${fmt}${draft}PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${author}${fmt}`
     }
 }
 
@@ -331,6 +315,43 @@ function createRealIO(): SlackIO {
             await client.chat.update({ channel: channel, ts: ts, text: text })
         },
     }
+}
+
+class PrThreadActions {
+    readonly actorLogin: string
+    readonly pr: PullRequest
+    private readonly io: SlackIO
+    private readonly channel: string
+    private readonly topLevelMessageTs: string
+
+    constructor(actorLogin: string, pr: PullRequest, io: SlackIO, channel: string, topLevelMessageTs: string) {
+        this.actorLogin = actorLogin;
+        this.pr = pr;
+        this.io = io;
+        this.channel = channel;
+        this.topLevelMessageTs = topLevelMessageTs;
+    }
+
+    async replyToThread(msg: string, emoji?: PrEmoji) {
+        if (emoji !== undefined) {
+            let updatedTopLevelMessage = await topLevelMessage(this.pr, this.actorLogin, emoji, this.io.store.emoji);
+            await this.io.updateMessage(this.channel, this.topLevelMessageTs, updatedTopLevelMessage)
+
+        }
+        let fullMsg = msg
+        if (emoji !== undefined) {
+            const emojiValue = await this.io.store.emoji.get(`pr_${emoji}`)
+            fullMsg = `${emojiValue} ${fullMsg}`
+        }
+        await this.io.sendMessage(this.channel, fullMsg, this.topLevelMessageTs)
+    }
+}
+
+async function topLevelMessage(pr: PullRequest, author: string, emoji: PrEmoji, emojis: EmojiStore): Promise<string> {
+    const emojiResolved = await emojis.get(`pr_${emoji}`)
+    const fmt = (emoji === 'merged' || emoji === 'closed') ? "~" : ""
+    const draft = (emoji == 'draft') ? "DRAFT " : ""
+    return `${emojiResolved} ${fmt}${draft}PR <${pr.html_url}|#${pr.number}: ${pr.title}> (+${pr.additions}/-${pr.deletions}) by ${author}${fmt}`
 }
 
 enum CommentAction {

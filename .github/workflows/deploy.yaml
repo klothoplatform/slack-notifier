@@ -57,8 +57,8 @@ jobs:
         "$RUNNER_TEMP/klotho" . --app "$APP_NAME" --provider aws
     - name: Pulumi secrets
       run: |
-        echo "$SLACK_TOKEN" > compiled/slack_token
-        echo "$SLACK_SIGNING_SECRET" > compiled/slack_signing_secret
+        printf '%s' "$SLACK_TOKEN" | tr -d "\n" > compiled/slack_token
+        printf '%s' "$SLACK_SIGNING_SECRET" | tr -d "\n" > compiled/slack_signing_secret
         ls -l compiled/
         if [[ ! ( -s compiled/slack_token && -s compiled/slack_signing_secret ) ]]; then
           echo >2 "Secrets files were empty!"

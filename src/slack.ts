@@ -95,17 +95,16 @@ export class Slack {
     private async handlePrConvertedToDraft(channel: string, event: PullRequestConvertedToDraftEvent) {
         await this.onPrThread(channel, event, async (pr, prevTs) => {
             const msg = await this.topLevelMessage(pr, event.sender.login, 'draft')
-            const update = this.io.updateMessage(channel, prevTs, msg)
+            await this.io.updateMessage(channel, prevTs, msg)
             const emoji = await this.io.store.emoji.get('pr_draft')
-            const send = this.io.sendMessage(channel, `${emoji} PR has been converted to draft`, prevTs)
-            await Promise.all([update, send])
+            await this.io.sendMessage(channel, `${emoji} PR has been converted to draft`, prevTs)
         })
     }
 
     private async handlePrReadyForReview(channel: string, event: PullRequestReadyForReviewEvent) {
         await this.onPrThread(channel, event, async (pr, prevTs) => {
             const msg = await this.topLevelMessage(pr, event.sender.login, 'opened')
-            const update = this.io.updateMessage(channel, prevTs, msg)
+            await this.io.updateMessage(channel, prevTs, msg)
             const emoji = await this.io.store.emoji.get('pr_opened')
             const send = this.io.sendMessage(channel, `${emoji} PR is ready for review`, prevTs)
             // clear the lastCommenter, if there is one; it's considered a fresh line of commenting
@@ -114,7 +113,7 @@ export class Slack {
             if (lastCommenterKey !== undefined) {
                 clearLastCommenter = this.io.store.lastCommenter.set(lastCommenterKey, "")
             }
-            await Promise.all([update, send, clearLastCommenter])
+            await Promise.all([send, clearLastCommenter])
         })
     }
 
@@ -152,11 +151,10 @@ export class Slack {
         console.log('handling close event')
         await this.onPrThread(channel, event, async (pr, prevTs) => {
             const mergeVerb = event.pull_request.merged ? 'merged' : 'closed'
-            const emoji = await this.io.store.emoji.get(`pr_${event.pull_request.merged ? 'merged' : 'closed'}`)
+            const emoji = this.io.store.emoji.get(`pr_${event.pull_request.merged ? 'merged' : 'closed'}`)
             const msg = await this.topLevelMessage(pr, event.sender.login, event.pull_request.merged ? 'merged' : 'closed')
-            let updateTopLevelMessage = this.io.updateMessage(channel, prevTs, msg)
-            let postToThread = this.io.sendMessage(channel, `${await emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
-            await Promise.all([updateTopLevelMessage, postToThread])
+            await this.io.updateMessage(channel, prevTs, msg)
+            await this.io.sendMessage(channel, `${await emoji} PR was ${mergeVerb} by ${event.sender.login}`, prevTs)
         })
     }
 

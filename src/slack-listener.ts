@@ -1,9 +1,3 @@
-/**
- * @klotho::execution_unit {
- *   id = "slack-listener"
- * }
- */
-
 import express = require('express')
 import * as SlackBolt from '@slack/bolt'
 import { WebClient } from '@slack/web-api'

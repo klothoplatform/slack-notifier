@@ -1,9 +1,3 @@
-/**
- * @klotho::execution_unit {
- *   id = "github-listener"
- * }
- */
-
 import express = require('express')
 import { Slack } from './slack'
 import { IssueCommentEvent, PingEvent, PullRequestEvent } from "@octokit/webhooks-types";

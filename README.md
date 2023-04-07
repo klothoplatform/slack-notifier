@@ -41,7 +41,7 @@ To change this, set an env variable `KLOTHO_APP_NAME`. If you do, the applicatio
 
 # Contributing
 
-We welcome pull requests, or you can open an issue to provide feedback or make a suggestion. You can also find us at our [Discord server](https://discord.com/invite/4z2jwRvnyM).
+We welcome pull requests, or you can open an issue to provide feedback or make a suggestion. You can also find us at our [Discord server](https://klo.dev/discordurl).
 
 We don't have any formal contribution requirements or style guides yet for pull requests. Please:
 
